@@ -1,0 +1,81 @@
+name: Release
+
+# Publishes to Maven Central through the Central Portal.
+#
+# Central is IMMUTABLE: a published version can never be replaced, only superseded by a
+# higher one. So the whole gate runs before anything uploads, and autoPublish is false in
+# the pom -- the bundle is validated and then waits for a human in the Portal.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish to Maven Central
+    runs-on: ubuntu-latest
+    environment: maven-central
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          # Imports the key into the runner's keyring and writes a settings.xml whose
+          # `central` server entry reads these env vars -- which is why the deploy step
+          # needs no settings.xml of its own.
+          server-id: central
+          server-username: CENTRAL_TOKEN_USERNAME
+          server-password: CENTRAL_TOKEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Verify the tag matches the pom version
+        # A wrong version on Central is permanent, so this runs before anything is built.
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          POM_VERSION="$(mvn -B -ntp -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          if [ "$TAG_VERSION" != "$POM_VERSION" ]; then
+            echo "::error::tag $GITHUB_REF_NAME (version $TAG_VERSION) does not match pom version $POM_VERSION"
+            exit 1
+          fi
+          case "$POM_VERSION" in
+            *-SNAPSHOT) echo "::error::refusing to release a SNAPSHOT version"; exit 1 ;;
+          esac
+          echo "releasing $POM_VERSION"
+
+      - name: Full gate at the exact bytes about to be published
+        run: mvn -B -ntp verify
+
+      - name: Integration gate on both ends of the supported range
+        # The floor matters more than the ceiling here: wasRetried() is what the entire
+        # retry story rests on, and it does not exist before TestNG 7.4.0. Releasing
+        # without re-checking the floor would ship a jar whose headline feature is
+        # silently dead for anyone pinned low.
+        run: |
+          mvn -B -ntp -q install -DskipTests
+          for v in 7.4.0 7.12.0; do
+            echo "::group::TestNG $v"
+            TESTNG_VERSION="$v" python3 test/integration/verify.py
+            echo "::endgroup::"
+          done
+
+      - name: Deploy
+        run: mvn -B -ntp -Prelease deploy -DskipTests
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: What to do next
+        run: |
+          echo "Bundle uploaded and validated. It is NOT public yet."
+          echo "Go to https://central.sonatype.com/publishing/deployments and publish it,"
+          echo "then verify at the source rather than at a green checkmark:"
+          echo "  https://repo1.maven.org/maven2/com/qualflare/qualflare-testng/"

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.qualflare</groupId>
   <artifactId>qualflare-testng</artifactId>
@@ -7,6 +9,29 @@
   <packaging>jar</packaging>
   <name>qualflare-testng</name>
   <description>Native TestNG reporter for Qualflare</description>
+  <url>https://qualflare.com/testng-test-reporting/</url>
+
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <name>Qualflare</name>
+      <email>ibrahim@qualflare.com</email>
+      <organization>Qualflare</organization>
+      <organizationUrl>https://qualflare.com</organizationUrl>
+    </developer>
+  </developers>
+
+  <scm>
+    <url>https://github.com/Qualflare/qualflare-testng</url>
+    <connection>scm:git:https://github.com/Qualflare/qualflare-testng.git</connection>
+    <developerConnection>scm:git:git@github.com:Qualflare/qualflare-testng.git</developerConnection>
+  </scm>
 
   <properties>
     <maven.compiler.release>11</maven.compiler.release>
@@ -49,4 +74,75 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!-- Everything Central requires, kept off the everyday build: gpg wants a passphrase
+         and javadoc is slow, so `mvn test` should pay for neither. CI adds -Prelease. -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals><goal>jar-no-fork</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.11.2</version>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals><goal>jar</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.7</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals><goal>sign</goal></goals>
+                <configuration>
+                  <!-- Read the passphrase from a property rather than a TTY: CI has no
+                       terminal to prompt on, and gpg would hang instead of failing. -->
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.9.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <!-- FALSE on purpose. Central is immutable: a published version can never be
+                   replaced, only superseded. Releases get eyeballed in the Portal before
+                   going live. Flip this once the pipeline has earned it. -->
+              <autoPublish>false</autoPublish>
+              <waitUntil>validated</waitUntil>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
