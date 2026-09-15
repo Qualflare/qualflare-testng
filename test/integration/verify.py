@@ -52,19 +52,18 @@ def run():
         # trusting a green checkmark.
         print("  no report written -- maven exited %d; the fixture build said:"
               % proc.returncode)
-        matched = False
         for line in (proc.stdout + proc.stderr).splitlines():
             if re.search(r"ERROR|BUILD FAILURE|Could not resolve|cannot find symbol", line):
                 print("    " + line.strip())
-                matched = True
-        if not matched:
-            # The build SUCCEEDED and still produced nothing. Most likely the listener
-            # never registered, i.e. META-INF/services/org.testng.ITestNGListener is
-            # missing from the built jar or names the wrong class. There is no
-            # error-shaped line to grep for, so print the tail instead of nothing.
-            print("    (no error-shaped lines -- the build succeeded but produced no")
-            print("     report, so the listener probably never registered via")
-            print("     META-INF/services/org.testng.ITestNGListener)")
+        if proc.returncode == 0:
+            # Exit 0 with no report implicates registration or packaging, NOT the test
+            # failures above -- this fixture fails tests on purpose (testFailureIgnore),
+            # so those [ERROR] lines are expected noise and are not the cause. Printing
+            # them alone sent a reader chasing the wrong thing.
+            print("    the build SUCCEEDED and still produced no report, so the listener")
+            print("     probably never registered: check that the built jar contains")
+            print("     META-INF/services/org.testng.ITestNGListener naming")
+            print("     com.qualflare.testng.QualflareListener")
             for line in (proc.stdout + proc.stderr).splitlines()[-25:]:
                 print("    " + line.rstrip())
         sys.exit(1)
