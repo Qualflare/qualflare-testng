@@ -50,10 +50,23 @@ def run():
         # Say WHY. Swallowing maven's output turns a missing dependency into the
         # uninformative "no report written", which is the same class of mistake as
         # trusting a green checkmark.
-        print("  no report written -- the fixture build said:")
+        print("  no report written -- maven exited %d; the fixture build said:"
+              % proc.returncode)
+        matched = False
         for line in (proc.stdout + proc.stderr).splitlines():
             if re.search(r"ERROR|BUILD FAILURE|Could not resolve|cannot find symbol", line):
                 print("    " + line.strip())
+                matched = True
+        if not matched:
+            # The build SUCCEEDED and still produced nothing. Most likely the listener
+            # never registered, i.e. META-INF/services/org.testng.ITestNGListener is
+            # missing from the built jar or names the wrong class. There is no
+            # error-shaped line to grep for, so print the tail instead of nothing.
+            print("    (no error-shaped lines -- the build succeeded but produced no")
+            print("     report, so the listener probably never registered via")
+            print("     META-INF/services/org.testng.ITestNGListener)")
+            for line in (proc.stdout + proc.stderr).splitlines()[-25:]:
+                print("    " + line.rstrip())
         sys.exit(1)
     if len(files) != 1:
         print("  expected exactly 1 report file, got %d" % len(files))
@@ -63,11 +76,23 @@ def run():
 
 
 def index(report):
-    out = {}
+    """Flatten cases across suites, keyed by display name.
+
+    Name uniqueness is asserted BEFORE indexing. A plain dict silently collapses
+    duplicates, and duplicates are precisely what an identity regression produces: one
+    retried test split into two CaseRecords with different uniqueIds emits two objects
+    sharing a display name. Without this assertion the check named "a retried test is
+    ONE case" could not fail for its own bug class -- Accumulator keys by uniqueId and
+    ReportWriter does no name-based dedup.
+    """
+    seen = {}
     for suite in report["suites"]:
         for case in suite["cases"]:
-            out[case["name"]] = case
-    return out
+            seen.setdefault(case["name"], []).append(case)
+    dupes = {n: len(v) for n, v in seen.items() if len(v) > 1}
+    check("no case name appears twice (an identity split would duplicate one)",
+          not dupes, dupes)
+    return {n: v[0] for n, v in seen.items()}
 
 
 def main():
