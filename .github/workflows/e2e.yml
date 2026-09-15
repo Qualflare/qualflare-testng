@@ -1,0 +1,101 @@
+name: E2E
+
+# Dogfood: qualflare-testng reports on a suite of itself, and the PUBLISHED CLI uploads it.
+# The numbers in the Qualflare project are therefore this reporter's own, produced by the
+# code this repo documents.
+#
+# Every case in e2e/ is meant to pass, so a red run is a real regression. The deliberately
+# awkward ones (a throwing @BeforeClass, a test that never recovers, a timeout, metadata
+# emitted from a configuration method) live in test/integration/fixture, which sets
+# testFailureIgnore and is never uploaded.
+#
+# Why e2e/ is a separate Maven project rather than the unit suite: the reporter registers
+# itself via ServiceLoader, so running the ROOT project's tests attaches a live listener to
+# them, and those tests call Run.resetForTest() and inspect the accumulator directly. The
+# resulting self-report is meaningless (one case out of 47). e2e/ never touches that state,
+# so its report is complete. Uploading the unit suite's report would publish a green badge
+# that means nothing.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two uploads racing for the same project: a half-written launch is worse than a
+  # late one.
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dogfood:
+    name: Dogfood suite + upload to Qualflare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build and install the reporter from THIS commit
+        run: mvn -B -ntp -q install -DskipTests
+
+      - name: Run the dogfood suite
+        id: suite
+        continue-on-error: true
+        working-directory: e2e
+        run: |
+          # Read the version from the ROOT pom rather than trusting the fixture default.
+          # A stale default went unnoticed for four commits in the sibling project once
+          # versions:set had moved on.
+          VERSION="$(cd .. && mvn -B -ntp -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          mvn -B -ntp test -Dqualflare.version="$VERSION"
+
+      - name: Verify the report matches what the suite declared
+        id: verify
+        continue-on-error: true
+        working-directory: e2e
+        env:
+          QUALFLARE_OUTPUT_DIR: qualflare-results
+        run: python3 verify.py
+
+      - name: Install the published CLI
+        run: npm install -g @qualflare/cli
+
+      - name: Record the project's run count before uploading
+        id: runs_before
+        run: echo "count=$(python3 e2e/assert-launch-landed.py qualflare-testng --print)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to Qualflare
+        env:
+          QUALFLARE_TOKEN: ${{ secrets.QF_TOKEN }}
+        run: |
+          qf login qualflare-testng "$QUALFLARE_TOKEN" --force
+          qf qualflare-testng collect ./e2e/qualflare-results
+
+      - name: Assert the launch reached the project
+        # `OK Test results collected successfully` is not evidence. @qualflare/cli once
+        # printed exactly that for eleven consecutive runs while nothing reached the
+        # server, which is why this guard exists across the whole reporter family. It
+        # fails OPEN when the count cannot be read, so a project that is not public yet
+        # produces a warning rather than a false red.
+        run: python3 e2e/assert-launch-landed.py qualflare-testng --before "${{ steps.runs_before.outputs.count }}"
+
+      - name: Keep the report when something went wrong
+        if: steps.suite.outcome != 'success' || steps.verify.outcome != 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-results
+          path: e2e/qualflare-results
+
+      - name: Fail if the suite or the verifier was red
+        if: steps.suite.outcome != 'success' || steps.verify.outcome != 'success'
+        run: |
+          echo "::error::suite=${{ steps.suite.outcome }} verify=${{ steps.verify.outcome }}"
+          exit 1
