@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.qualflare</groupId>
+  <artifactId>qualflare-testng</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+  <name>qualflare-testng</name>
+  <description>Native TestNG reporter for Qualflare</description>
+
+  <properties>
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- The FLOOR, not the tested ceiling. wasRetried() must exist; it does from 7.4.0.
+         CI runs the fixture against 7.4.0 and 7.12.0. -->
+    <testng.version>7.12.0</testng.version>
+    <surefire.version>3.5.6</surefire.version>
+  </properties>
+
+  <dependencies>
+    <!-- provided: the published artifact must pull in nothing. A test reporter sits on
+         everyone's test classpath and must not put a second TestNG in front of theirs. -->
+    <dependency>
+      <groupId>org.testng</groupId>
+      <artifactId>testng</artifactId>
+      <version>${testng.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <!-- Without this, getImplementationVersion() returns null and every report
+                 claims 0.0.0-dev. That shipped once already in qualflare-junit5 0.1.0. -->
+            <manifest><addDefaultImplementationEntries>true</addDefaultImplementationEntries></manifest>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire.version}</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>
