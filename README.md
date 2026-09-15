@@ -1,5 +1,6 @@
 # qualflare-testng
 
+[![Maven Central](https://img.shields.io/maven-central/v/com.qualflare/qualflare-testng.svg)](https://central.sonatype.com/artifact/com.qualflare/qualflare-testng)
 [![CI](https://github.com/Qualflare/qualflare-testng/actions/workflows/ci.yml/badge.svg)](https://github.com/Qualflare/qualflare-testng/actions/workflows/ci.yml)
 [![Qualflare](https://api.qualflare.com/p/qualflare-testng/badge.svg)](https://reports.qualflare.com/p/qualflare-testng/launches)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
