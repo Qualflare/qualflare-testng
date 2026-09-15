@@ -152,6 +152,49 @@ public class QualflareListenerTest {
         }
     }
 
+    /**
+     * {@code qualflare.enabled} was documented in docs/CONFIGURATION.md and had zero
+     * callers -- {@code QUALFLARE_ENABLED=false} still wrote a report. The positive control
+     * for this is {@code aRunWithOneCaseDoesWriteAReportFile} below: without it, "no file
+     * appeared" would also be satisfied by writing being broken outright.
+     */
+    @Test
+    public void aDisabledRunWritesNoReportFile() throws Exception {
+        Path dir = Files.createTempDirectory("qf-disabled");
+        String prevDir = System.getProperty("qualflare.outputDir");
+        String prevEnabled = System.getProperty("qualflare.enabled");
+        System.setProperty("qualflare.outputDir", dir.toString());
+        System.setProperty("qualflare.enabled", "false");
+        try {
+            ITestResult r = Fakes.result("C", "passes", new Object[] {},
+                    ITestResult.SUCCESS, null, false);
+            listener.onTestStart(r);
+            listener.onTestSuccess(r);
+            assertFalse(Run.accumulator().isEmpty(),
+                    "the case must have accumulated: this test is about WRITING, not"
+                            + " about the listener going deaf");
+
+            listener.onExecutionFinish();
+
+            try (java.util.stream.Stream<Path> s = Files.list(dir)) {
+                assertEquals(s.count(), 0L,
+                        "qualflare.enabled=false must write no report file");
+            }
+        } finally {
+            restore("qualflare.outputDir", prevDir);
+            restore("qualflare.enabled", prevEnabled);
+            Temp.deleteRecursively(dir);
+        }
+    }
+
+    private static void restore(String key, String previous) {
+        if (previous == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, previous);
+        }
+    }
+
     @Test
     public void aRunWithOneCaseDoesWriteAReportFile() throws Exception {
         // The positive control for the test above. Without it, "no file appeared" could be

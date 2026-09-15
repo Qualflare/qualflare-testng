@@ -54,6 +54,17 @@ final class Run {
      * JSON.
      */
     static synchronized void write() {
+        // The one place the switch can be honoured for every write path at once: both
+        // onExecutionFinish and the shutdown hook come through here. Checked at write time
+        // rather than at listener construction so a suite that sets the property in a
+        // @BeforeSuite still gets the behaviour it asked for.
+        //
+        // Accumulation itself is deliberately NOT disabled. It costs a map insert per test,
+        // it cannot fail a build, and short-circuiting the listener callbacks instead would
+        // mean two code paths to keep honest for no measurable gain.
+        if (!Config.enabled()) {
+            return;
+        }
         if (ACCUMULATOR.isEmpty()) {
             return;
         }

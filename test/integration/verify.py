@@ -37,13 +37,14 @@ def reporter_version():
     return m.group(1) if m else "0.1.0-SNAPSHOT"
 
 
-def run():
+def run(extra_args=()):
     results = os.path.join(FIXTURE, "qualflare-results")
     shutil.rmtree(results, ignore_errors=True)
 
     cmd = [MVN, "-q", "test", "-Dqualflare.version=" + reporter_version()]
     if TESTNG:
         cmd.append("-Dtestng.version=" + TESTNG)
+    cmd.extend(extra_args)
     proc = subprocess.run(cmd, cwd=FIXTURE, capture_output=True, text=True)
 
     files = glob.glob(os.path.join(results, "*.json"))
@@ -75,7 +76,7 @@ def run():
         return json.load(fh), proc.stdout + proc.stderr
 
 
-def index(report):
+def index(report, prefix=""):
     """Flatten cases across suites, keyed by display name.
 
     Name uniqueness is asserted BEFORE indexing. A plain dict silently collapses
@@ -90,12 +91,70 @@ def index(report):
         for case in suite["cases"]:
             seen.setdefault(case["name"], []).append(case)
     dupes = {n: len(v) for n, v in seen.items() if len(v) > 1}
-    check("no case name appears twice (an identity split would duplicate one)",
+    check(prefix + "no case name appears twice (an identity split would duplicate one)",
           not dupes, dupes)
     return {n: v[0] for n, v in seen.items()}
 
 
+def worker_threads(cases):
+    """The distinct TestNG worker threads the fixture observed, from its qfThread label."""
+    names = set()
+    for case in cases.values():
+        for label in case.get("labels") or []:
+            if label.get("name") == "qfThread":
+                names.add(label.get("value"))
+    return names
+
+
+def signature(cases):
+    """Name -> (status, attempt count): what must not change with the execution mode."""
+    return {n: (c.get("status"), len(c.get("attempts") or [])) for n, c in cases.items()}
+
+
+def compare_parallel(serial):
+    """The spec's serial-versus-parallel comparison.
+
+    Under parallel="methods" every accumulation is a read-modify-write driven from a TestNG
+    worker thread, and Accumulator's entire `synchronized` design exists for that case --
+    untested until now, as was Qualflare's thread-local resolution under concurrent workers,
+    which is the mechanism most likely to misattribute metadata. A lost attempt or a label
+    on the wrong case shows up here as a disagreement between the two reports.
+    """
+    print()
+    print("parallel run (-Dparallel=methods -DthreadCount=4):")
+    report, _ = run(["-Dparallel=methods", "-DthreadCount=4"])
+    cases = index(report, "parallel: ")
+
+    # PROVE the run was actually parallel. Without this the comparison could pass simply
+    # because -Dparallel never reached TestNG, which would make the whole check incapable
+    # of failing for the concurrency bugs it exists to find.
+    threads = worker_threads(cases)
+    check("parallel: TestNG really did use more than one worker thread",
+          len(threads) >= 2, sorted(threads))
+
+    want, got = signature(serial), signature(cases)
+    missing = sorted(set(want) - set(got))
+    extra = sorted(set(got) - set(want))
+    check("parallel: the same set of cases is reported", not missing and not extra,
+          {"missing": missing, "unexpected": extra})
+
+    disagree = {n: {"serial": want[n], "parallel": got[n]}
+                for n in sorted(set(want) & set(got)) if want[n] != got[n]}
+    check("parallel: every case keeps its status and attempt count", not disagree, disagree)
+
+    # Metadata attribution. The label must be on its own case and on NO other -- a case
+    # picking up another case's label is exactly the silent wrong data the thread-local
+    # resolution has to prevent.
+    carriers = sorted(n for n, c in cases.items() if "checkout" in json.dumps(c))
+    check("parallel: the label is on exactly its own case", carriers == ["carriesMetadata()"],
+          carriers)
+    par_meta = cases.get("carriesMetadata()") or {}
+    check("parallel: the attachment survived too",
+          len(par_meta.get("attachments") or []) == 1, par_meta.get("attachments"))
+
+
 def main():
+    print("serial run:")
     report, output = run()
     cases = index(report)
     print("cases: " + ", ".join(sorted(cases)))
@@ -134,6 +193,11 @@ def main():
           "guardedOne()" in cases and "guardedTwo()" in cases, sorted(cases))
 
     check("a disabled test appears nowhere", "disabled()" not in cases, sorted(cases))
+
+    # The control for the parallel comparison below: serially there is exactly one worker.
+    serial_threads = worker_threads(cases)
+    check("serially the whole fixture runs on one thread", len(serial_threads) == 1,
+          sorted(serial_threads))
 
     meta = cases.get("carriesMetadata()")
     check("metadata reached the report", meta is not None)
@@ -189,6 +253,8 @@ def main():
     check("and the drop was WARNED about, naming the configuration method",
           "metadata call from the configuration method setUp" in output,
           "\n".join(l for l in output.splitlines() if "qualflare-testng]" in l)[:600])
+
+    compare_parallel(cases)
 
     print()
     if failures:
