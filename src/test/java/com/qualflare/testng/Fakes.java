@@ -21,6 +21,22 @@ final class Fakes {
 
     static ITestResult result(String className, String methodName, Object[] params,
                               int status, Throwable thrown, boolean wasRetried) {
+        return result(className, methodName, params, status, thrown, wasRetried, true);
+    }
+
+    /**
+     * A CONFIGURATION method's result, as {@code Reporter.getCurrentTestResult()} returns
+     * inside {@code @BeforeMethod}. The only difference that matters is
+     * {@code getMethod().isTest() == false}, which is how the API tells the two apart.
+     */
+    static ITestResult configResult(String className, String methodName) {
+        return result(className, methodName, new Object[] {}, ITestResult.SUCCESS, null,
+                false, false);
+    }
+
+    static ITestResult result(String className, String methodName, Object[] params,
+                              int status, Throwable thrown, boolean wasRetried,
+                              boolean isTest) {
         InvocationHandler h = (proxy, method, args) -> {
             switch (method.getName()) {
                 case "getParameters":  return params;
@@ -29,7 +45,7 @@ final class Fakes {
                 case "wasRetried":     return wasRetried;
                 case "getName":        return methodName;
                 case "getTestClass":   return testClass(className);
-                case "getMethod":      return testMethod(methodName);
+                case "getMethod":      return testMethod(methodName, isTest);
                 case "toString":       return className + "#" + methodName;
                 case "hashCode":       return System.identityHashCode(proxy);
                 case "equals":         return proxy == args[0];
@@ -55,9 +71,10 @@ final class Fakes {
                 new Class<?>[] {org.testng.ITestClass.class}, h);
     }
 
-    private static Object testMethod(String methodName) {
+    private static Object testMethod(String methodName, boolean isTest) {
         InvocationHandler h = (proxy, method, args) -> {
             if ("getMethodName".equals(method.getName())) return methodName;
+            if ("isTest".equals(method.getName())) return isTest;
             if ("toString".equals(method.getName())) return methodName;
             if ("hashCode".equals(method.getName())) return methodName.hashCode();
             if ("equals".equals(method.getName())) return proxy == args[0];

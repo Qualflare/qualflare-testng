@@ -72,7 +72,7 @@ def run():
         print("  expected exactly 1 report file, got %d" % len(files))
         sys.exit(1)
     with open(files[0]) as fh:
-        return json.load(fh)
+        return json.load(fh), proc.stdout + proc.stderr
 
 
 def index(report):
@@ -96,7 +96,8 @@ def index(report):
 
 
 def main():
-    cases = index(run())
+    report, output = run()
+    cases = index(report)
     print("cases: " + ", ".join(sorted(cases)))
 
     flaky = cases.get("flakyRecovers()")
@@ -164,6 +165,30 @@ def main():
                 except Exception as exc:  # noqa: BLE001 - reported, not raised
                     decoded = "undecodable: %s" % exc
             check("and its content, base64-inlined", decoded == "receipt-body", decoded)
+
+    # Reporter.getCurrentTestResult() is NON-NULL inside @BeforeMethod and returns the
+    # CONFIGURATION method's result, so a null check alone let config metadata through: it
+    # was filed under a key that never becomes a case, with no warning, leaking for the
+    # life of the JVM. Setting shared labels in a base-class @BeforeMethod is mainstream
+    # TestNG, so this is a path real users take.
+    cfgmeta = cases.get("doesNotInheritConfigMetadata()")
+    check("the test guarded by a metadata-emitting @BeforeMethod is reported",
+          cfgmeta is not None, sorted(cases))
+    whole = json.dumps(report)
+    for leaked in ("leaked-from-beforeMethod", "leaked-config-tag", "leaked-config-value"):
+        check("no @BeforeMethod metadata reached the report (%s)" % leaked,
+              leaked not in whole)
+    check("a SUCCESSFUL configuration method produces no case of its own",
+          "[config] ConfigMetadataTest#setUp" not in cases,
+          [k for k in cases if k.startswith("[config] ")])
+
+    # The report alone CANNOT prove this one. Dropped metadata and leaked metadata look
+    # identical in the JSON -- a key that never becomes a case emits nothing either way.
+    # The warning on stderr is the only observable difference, and "dropped WITH A WARNING"
+    # is the constraint's actual wording, so it is what gets pinned.
+    check("and the drop was WARNED about, naming the configuration method",
+          "metadata call from the configuration method setUp" in output,
+          "\n".join(l for l in output.splitlines() if "qualflare-testng]" in l)[:600])
 
     print()
     if failures:

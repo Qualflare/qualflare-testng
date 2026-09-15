@@ -71,8 +71,9 @@ public class CheckoutTest {
 ```
 
 No annotation and no registration — the API finds the running test through TestNG's own
-thread-local. Calls made off the test thread are dropped with a warning rather than
-attached to whichever test runs next.
+thread-local. Calls made with **no test in scope** — including from a configuration method
+such as `@BeforeMethod` — are dropped with a warning rather than attached to whichever test
+runs next.
 
 **Nothing in the API can fail your test.** No method throws, and calls are inert when no
 reporter is listening.

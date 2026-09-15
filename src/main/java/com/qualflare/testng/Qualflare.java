@@ -1,5 +1,6 @@
 package com.qualflare.testng;
 
+import org.testng.ITestNGMethod;
 import org.testng.ITestResult;
 import org.testng.Reporter;
 
@@ -26,7 +27,8 @@ public final class Qualflare {
     public static final String MEDIUM = "medium";
     public static final String LOW = "low";
 
-    private static final AtomicBoolean WARNED = new AtomicBoolean(false);
+    private static final AtomicBoolean WARNED_NO_TEST = new AtomicBoolean(false);
+    private static final AtomicBoolean WARNED_CONFIG = new AtomicBoolean(false);
 
     private Qualflare() {}
 
@@ -94,10 +96,9 @@ public final class Qualflare {
      * @param mimeType the media type, e.g. {@code "image/png"}; drives inline-vs-copy
      */
     public static void attachment(String name, Path file, String mimeType) {
-        ITestResult r = current();
+        ITestResult r = currentTest();
         if (r == null) {
-            warnDropped();
-            return;
+            return; // currentTest() has already warned
         }
         try {
             Attachments.Attachment a = Attachments.of(name, file, mimeType);
@@ -114,7 +115,7 @@ public final class Qualflare {
         if (body == null) {
             return;
         }
-        if (current() == null) {
+        if (currentTest() == null) {
             body.run(); // inert, but the test's own work still has to happen
             return;
         }
@@ -144,31 +145,64 @@ public final class Qualflare {
     }
 
     /**
+     * The running {@code @Test}, or null when there is none -- in which case the caller has
+     * already been warned and must do nothing.
+     *
+     * <p><b>A non-null result is not enough.</b> Measured on TestNG 7.4.0 and 7.12.0:
+     * {@code Reporter.getCurrentTestResult()} is non-null inside {@code @BeforeClass} and
+     * {@code @BeforeMethod} and returns the CONFIGURATION method's result. Filing metadata
+     * under that key is silent data loss: the key never becomes a case (only *failing*
+     * configuration methods are reported, and under a different key), so the entries sit in
+     * {@code Accumulator.pendingEntries} for the life of the JVM, growing on every
+     * {@code @BeforeMethod} invocation, and nothing ever says so. Setting shared labels in a
+     * base class {@code @BeforeMethod} is mainstream TestNG, so this has to be told to the
+     * author rather than absorbed.
+     *
+     * <p>{@code Reporter}'s thread-local is an {@code InheritableThreadLocal} (verified in
+     * the 7.12.0 bytecode), so a thread the test itself spawns DOES inherit the test's
+     * result and its metadata is attributed to that test. Only a thread with no result of
+     * its own -- a pooled thread created before the test, or code outside the run entirely
+     * -- lands in the null branch.
+     */
+    private static ITestResult currentTest() {
+        ITestResult r = current();
+        if (r == null) {
+            if (WARNED_NO_TEST.compareAndSet(false, true)) {
+                System.err.println("[qualflare-testng] a metadata call with no test in scope"
+                        + " was dropped. Attaching it to whichever test runs next would be"
+                        + " silent wrong data.");
+            }
+            return null;
+        }
+        ITestNGMethod m = r.getMethod();
+        if (m == null || !m.isTest()) {
+            if (WARNED_CONFIG.compareAndSet(false, true)) {
+                System.err.println("[qualflare-testng] a metadata call from the configuration"
+                        + " method " + (m == null ? "(unknown)" : m.getMethodName())
+                        + " was dropped. TestNG reports configuration methods outside the"
+                        + " test case, so there is no case for it to attach to -- move the"
+                        + " call into the @Test method itself.");
+            }
+            return null;
+        }
+        return r;
+    }
+
+    /**
      * Dropped with a warning rather than guessed at. Attaching this to whichever test runs
      * next is silent wrong data, which is worse than no data.
      *
-     * <p>The thread-local is per-thread by design, so a call made from a thread the test
-     * spawned finds nothing. That is the correct answer: the reporter cannot know which
-     * test that thread belongs to.
+     * @see #currentTest() for what counts as "in scope", which is narrower than non-null
      */
     private static void emit(String key, String value) {
-        ITestResult r = current();
+        ITestResult r = currentTest();
         if (r == null) {
-            warnDropped();
-            return;
+            return; // currentTest() has already warned
         }
         try {
             Run.accumulator().entry(TestKey.of(r), key, value);
         } catch (RuntimeException ignored) {
             // Fire and forget. A metadata problem must never fail somebody's run.
-        }
-    }
-
-    /** Once per JVM, not once per call, so a loop in a helper cannot drown the log. */
-    private static void warnDropped() {
-        if (WARNED.compareAndSet(false, true)) {
-            System.err.println("[qualflare-testng] metadata call outside a running test was"
-                    + " dropped. Calls must be made on the test's own thread.");
         }
     }
 

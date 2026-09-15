@@ -11,11 +11,19 @@ support, and the API finds the running test through TestNG's own thread-local
 
 - **Nothing here can fail your test.** No method returns an error, none throws, and every
   call is inert when no reporter is listening.
-- **Calls outside a running test are dropped with a warning**, not guessed at. Attaching
+- **Calls with no test in scope are dropped with a warning**, not guessed at. Attaching
   them to whichever test runs next is silent wrong data, which is worse than absent data.
-  Because the thread-local is per-thread, this also applies to a call made from a thread
-  the test itself spawned.
-- **Warnings are emitted once per JVM**, not once per call, so a loop cannot drown the log.
+- **A configuration method is not a test.** `Reporter.getCurrentTestResult()` *is* non-null
+  inside `@BeforeClass` and `@BeforeMethod`, but it returns the configuration method's own
+  result, and a successful configuration method is deliberately never reported. So a call
+  from `@BeforeMethod` — a common way to set shared labels — is dropped with a warning
+  naming the method. Move it into the `@Test` method.
+- **A thread the test spawns still counts as the test.** TestNG's thread-local is an
+  `InheritableThreadLocal`, so a child thread inherits the spawning test's result and
+  metadata from it is attributed to that test. Only a thread with no result of its own —
+  a pooled thread created before the test, or code outside the run — is out of scope.
+- **Warnings are emitted once per JVM per cause**, not once per call, so a loop cannot
+  drown the log.
 
 ## Reference
 
