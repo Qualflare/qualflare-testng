@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ## [0.1.0] - 2026-09-16
 
 ### Added
@@ -23,4 +25,5 @@ All notable changes to this project are documented here. The format follows
   parameters and masked parameters, nested steps, and file attachments. No method throws,
   and every call is inert when no reporter is listening.
 
+[Unreleased]: https://github.com/Qualflare/qualflare-testng/compare/v0.1.0...main
 [0.1.0]: https://github.com/Qualflare/qualflare-testng/releases/tag/v0.1.0
