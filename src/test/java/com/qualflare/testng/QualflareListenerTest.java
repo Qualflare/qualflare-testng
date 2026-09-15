@@ -86,6 +86,9 @@ public class QualflareListenerTest {
         listener.onTestFailure(a2);
 
         CaseRecord rec = only();
+        assertEquals(statusesOf(rec),
+                java.util.Arrays.asList(Status.FAILED, Status.FAILED),
+                "the retried attempt must be recorded as a failure, not a skip");
         assertEquals(rec.status(), Status.FAILED);
         assertFalse(rec.isFlaky(), "calling a hard failure flaky hides it behind a softer word");
     }
