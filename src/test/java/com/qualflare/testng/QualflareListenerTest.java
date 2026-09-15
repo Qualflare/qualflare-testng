@@ -3,6 +3,8 @@ package com.qualflare.testng;
 import org.testng.ITestResult;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import static org.testng.Assert.*;
@@ -128,9 +130,50 @@ public class QualflareListenerTest {
     }
 
     @Test
-    public void anEmptyRunWritesNothing() {
-        listener.onExecutionFinish();
-        assertTrue(Run.accumulator().isEmpty(),
-                "a run with no tests must not produce a report file");
+    public void anEmptyRunWritesNoReportFile() throws Exception {
+        // The original assertion here was Run.accumulator().isEmpty(), which is trivially
+        // true: @BeforeMethod already emptied it and Run.write() only reads. That version
+        // passed even with onExecutionFinish() deleted. This asserts the observable thing.
+        Path dir = Files.createTempDirectory("qf-empty-run");
+        String prev = System.getProperty("qualflare.outputDir");
+        System.setProperty("qualflare.outputDir", dir.toString());
+        try {
+            listener.onExecutionFinish();
+            try (java.util.stream.Stream<Path> s = Files.list(dir)) {
+                assertEquals(s.count(), 0L,
+                        "a run with no tests must not produce a report file");
+            }
+        } finally {
+            if (prev == null) {
+                System.clearProperty("qualflare.outputDir");
+            } else {
+                System.setProperty("qualflare.outputDir", prev);
+            }
+        }
+    }
+
+    @Test
+    public void aRunWithOneCaseDoesWriteAReportFile() throws Exception {
+        // The positive control for the test above. Without it, "no file appeared" could be
+        // true because writing is broken rather than because the run was empty.
+        Path dir = Files.createTempDirectory("qf-one-case");
+        String prev = System.getProperty("qualflare.outputDir");
+        System.setProperty("qualflare.outputDir", dir.toString());
+        try {
+            ITestResult r = Fakes.result("C", "passes", new Object[] {},
+                    ITestResult.SUCCESS, null, false);
+            listener.onTestStart(r);
+            listener.onTestSuccess(r);
+            listener.onExecutionFinish();
+            try (java.util.stream.Stream<Path> s = Files.list(dir)) {
+                assertEquals(s.count(), 1L, "one case must produce exactly one report file");
+            }
+        } finally {
+            if (prev == null) {
+                System.clearProperty("qualflare.outputDir");
+            } else {
+                System.setProperty("qualflare.outputDir", prev);
+            }
+        }
     }
 }
