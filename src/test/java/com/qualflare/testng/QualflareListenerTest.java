@@ -144,11 +144,8 @@ public class QualflareListenerTest {
                         "a run with no tests must not produce a report file");
             }
         } finally {
-            if (prev == null) {
-                System.clearProperty("qualflare.outputDir");
-            } else {
-                System.setProperty("qualflare.outputDir", prev);
-            }
+            restore("qualflare.outputDir", prev);
+            Temp.deleteRecursively(dir);
         }
     }
 
@@ -212,11 +209,8 @@ public class QualflareListenerTest {
                 assertEquals(s.count(), 1L, "one case must produce exactly one report file");
             }
         } finally {
-            if (prev == null) {
-                System.clearProperty("qualflare.outputDir");
-            } else {
-                System.setProperty("qualflare.outputDir", prev);
-            }
+            restore("qualflare.outputDir", prev);
+            Temp.deleteRecursively(dir);
         }
     }
 }

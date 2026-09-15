@@ -19,12 +19,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class Qualflare {
 
+    /** Link type: a bug or issue tracker item. The default for {@link #link(String)}. */
     public static final String ISSUE = "issue";
+    /** Link type: a test-management-system item. */
     public static final String TMS = "tms";
+    /** Link type: anything else -- a dashboard, a runbook, a build. */
     public static final String CUSTOM = "custom";
 
+    /** Priority: highest. */
     public static final String HIGH = "high";
+    /** Priority: middling. */
     public static final String MEDIUM = "medium";
+    /** Priority: lowest. */
     public static final String LOW = "low";
 
     private static final AtomicBoolean WARNED_NO_TEST = new AtomicBoolean(false);
@@ -32,10 +38,21 @@ public final class Qualflare {
 
     private Qualflare() {}
 
+    /**
+     * Records a named dimension to group and filter the case by.
+     *
+     * @param name  the dimension, e.g. {@code "feature"}; null becomes empty
+     * @param value the value, e.g. {@code "checkout"}; null becomes empty
+     */
     public static void label(String name, String value) {
         emit(Keys.LABEL, kv(name, value));
     }
 
+    /**
+     * Records one or more free tags.
+     *
+     * @param tags the tags; a null array is ignored, and a null element becomes empty
+     */
     public static void tag(String... tags) {
         if (tags == null) {
             return;
@@ -45,22 +62,51 @@ public final class Qualflare {
         }
     }
 
+    /**
+     * Records a link of type {@link #ISSUE}, named after its own URL.
+     *
+     * @param url the target
+     */
     public static void link(String url) {
         link(url, ISSUE, url);
     }
 
+    /**
+     * Records a link.
+     *
+     * @param url  the target
+     * @param type {@link #ISSUE}, {@link #TMS} or {@link #CUSTOM}
+     * @param name the display name
+     */
     public static void link(String url, String type, String name) {
         emit(Keys.LINK, str(url) + Keys.SEP + str(type) + Keys.SEP + str(name));
     }
 
+    /**
+     * Records the case's priority.
+     *
+     * @param priority {@link #HIGH}, {@link #MEDIUM} or {@link #LOW}
+     */
     public static void priority(String priority) {
         emit(Keys.PRIORITY, str(priority));
     }
 
+    /**
+     * Records free text shown on the case.
+     *
+     * @param text the description; null becomes empty
+     */
     public static void description(String text) {
         emit(Keys.DESCRIPTION, str(text));
     }
 
+    /**
+     * Records an input. Emitted inside an open {@link #step} it belongs to that step;
+     * emitted outside one it belongs to the case.
+     *
+     * @param name  the input's name
+     * @param value the input's value; use {@link #maskedParameter} for a secret
+     */
     public static void parameter(String name, String value) {
         emit(Keys.PARAMETER, kv(name, value));
     }
@@ -69,6 +115,8 @@ public final class Qualflare {
      * Takes no value at all. {@code masked} is only a display hint the server does not act
      * on, so withholding the value here is the only thing that actually keeps a secret out
      * of the report: a signature that cannot accept one cannot leak one.
+     *
+     * @param name the input's name, recorded with an empty value
      */
     public static void maskedParameter(String name) {
         emit(Keys.MASKED_PARAMETER, str(name));
@@ -111,6 +159,16 @@ public final class Qualflare {
         }
     }
 
+    /**
+     * Runs {@code body} as a timed step. Steps nest, reconstructed from emission order.
+     *
+     * <p>A body that throws is recorded as failed and <b>the exception still
+     * propagates</b>: turning a failing test green is the worst thing a reporter can do.
+     * When no test is in scope the reporting is inert but the body still runs.
+     *
+     * @param name the step's name
+     * @param body the work to time; null is ignored
+     */
     public static void step(String name, Runnable body) {
         if (body == null) {
             return;

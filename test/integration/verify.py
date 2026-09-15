@@ -189,8 +189,14 @@ def main():
     check("a failing @BeforeClass produces a config case", len(cfg) == 1, cfg)
     if cfg:
         check("and it is red", cases[cfg[0]]["status"] == "error", cases[cfg[0]]["status"])
-    check("its guarded tests are still reported",
-          "guardedOne()" in cases and "guardedTwo()" in cases, sorted(cases))
+    guarded = [cases.get("guardedOne()"), cases.get("guardedTwo()")]
+    check("its guarded tests are still reported", all(guarded), sorted(cases))
+    if all(guarded):
+        # Present is only half the trap. A suite whose @BeforeClass exploded must read as
+        # BROKEN, not as "nothing ran" -- and not as passed either, which is what an
+        # unpinned status check would have let through.
+        got = [g["status"] for g in guarded]
+        check("and each of them is SKIPPED", got == ["skipped", "skipped"], got)
 
     check("a disabled test appears nowhere", "disabled()" not in cases, sorted(cases))
 

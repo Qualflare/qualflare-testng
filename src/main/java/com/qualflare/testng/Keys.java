@@ -1,17 +1,22 @@
 package com.qualflare.testng;
 
 /**
- * The report-entry vocabulary shared by {@link Qualflare} and {@link QualflareListener}.
+ * The metadata vocabulary {@link Qualflare} writes and {@link Replay} reads back.
  *
- * <p>{@code publishReportEntry} carries a {@code Map<String,String>}, so a call has exactly
- * one string to work with. Multi-field messages are packed with {@link #SEP}, the ASCII
- * unit separator: it cannot appear in a Java identifier, a URL or a sane label, and unlike
- * {@code |} or {@code =} it needs no escaping rules that users would have to know about.
- * The listener splits with a limit so a value containing a separator cannot shift the
- * remaining fields.
+ * <p>Nothing framework-level is involved. TestNG has no equivalent of JUnit's
+ * {@code publishReportEntry}, so an entry here never leaves the JVM: {@code Qualflare}
+ * appends {key, value} straight into {@link Accumulator}'s per-attempt buffer, and
+ * {@link Replay} folds the buffer into a {@link CaseMeta} when the attempt finishes.
  *
- * <p>Keys are namespaced under {@code qf.} so they never collide with a project's own
- * report entries, which are common in Java suites and must pass through untouched.
+ * <p>A value is a single string, so multi-field messages are packed with {@link #SEP}, the
+ * ASCII unit separator: it cannot appear in a Java identifier, a URL or a sane label, and
+ * unlike {@code |} or {@code =} it needs no escaping rules that users would have to know
+ * about. {@code Replay.split} splits with a field limit, so a value that somehow contains a
+ * separator cannot shift the fields after it.
+ *
+ * <p>Keys stay namespaced under {@code qf.} even though nothing else shares the buffer.
+ * It costs four characters, it keeps the entries readable in a debugger, and it matches the
+ * eight sibling reporters -- one vocabulary to learn across all of them.
  */
 final class Keys {
     static final String SEP = "\u001f";
@@ -27,8 +32,4 @@ final class Keys {
     static final String STEP_STOP = "qf.step-";
 
     private Keys() {}
-
-    static boolean isOurs(String key) {
-        return key != null && key.startsWith("qf.");
-    }
 }

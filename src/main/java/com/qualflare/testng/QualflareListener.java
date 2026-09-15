@@ -28,6 +28,11 @@ import java.io.StringWriter;
 public final class QualflareListener
         implements ITestListener, IExecutionListener, IConfigurationListener {
 
+    /** Instantiated by TestNG's {@code ServiceLoader} wiring, which needs a public no-arg
+     *  constructor. Never construct one by hand: the state it reports into is JVM-scoped
+     *  (see {@link Run}), so a second instance would add nothing. */
+    public QualflareListener() {}
+
     private static Accumulator acc() {
         return Run.accumulator();
     }
@@ -51,8 +56,17 @@ public final class QualflareListener
 
     // ---- tests -------------------------------------------------------------------
 
+    /**
+     * Also installs the shutdown hook. {@code onExecutionStart} cannot be the only place
+     * that does: the hook is the fallback for a tool driving TestNG programmatically
+     * WITHOUT {@code IExecutionListener} firing, and in exactly that case
+     * {@code onExecutionStart} never fires either, so the fallback could not cover its own
+     * case. {@link Run#ensureHook()} is a one-shot CAS, so calling it per test is free
+     * after the first.
+     */
     @Override
     public void onTestStart(ITestResult result) {
+        Run.ensureHook();
         acc().started(TestKey.of(result), System.nanoTime());
     }
 
