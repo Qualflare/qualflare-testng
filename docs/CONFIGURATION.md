@@ -25,6 +25,10 @@ with nothing.
 is true — an unrecognised value enables rather than silently disabling reporting, because
 a typo that turns your reporting off is harder to notice than one that leaves it on.
 
+Disabling suppresses the **report file**: the listener stays attached and keeps
+accumulating, and nothing is written. It is read at write time, not at startup, so setting
+it from a `@BeforeSuite` still takes effect.
+
 `branch` and `commit` default to **null, not to a guess**. The wire contract distinguishes
 "not detected" from "absent", and the server groups history by branch — a wrong branch name
 is worse than no branch name.
