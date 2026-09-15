@@ -103,6 +103,31 @@ public final class QualflareListener
                 status, System.nanoTime(), messageOf(t), traceOf(t));
     }
 
+    // ---- configuration -----------------------------------------------------------
+
+    /**
+     * A throwing {@code @BeforeClass} produces this, PLUS a skip for each test it guarded
+     * (measured -- unlike JUnit, where the guarded tests emit nothing at all and a broken
+     * suite can read green).
+     *
+     * <p>The guarded skips are recorded by {@link #onTestSkipped} as ordinary skips. This
+     * method adds the configuration method itself as an {@code error} case, because a suite
+     * whose tests are ALL skipped reads as "nothing ran" rather than "broken". That is the
+     * same false-green qualflare-junit5 emits a synthetic case to avoid -- except here the
+     * case carries the real method name and the real stack trace.
+     *
+     * <p>Only FAILING configuration methods produce a case. Reporting successful ones would
+     * add setup noise to every suite in the product.
+     */
+    @Override
+    public void onConfigurationFailure(ITestResult result) {
+        Throwable t = result.getThrowable();
+        String display = "[config] " + classOf(result) + "#" + result.getMethod().getMethodName();
+        acc().finished(TestKey.of(result) + "/[qf-config-failure]",
+                suiteOf(result), classOf(result), display, legacyOf(result),
+                Status.ERROR, System.nanoTime(), messageOf(t), traceOf(t));
+    }
+
     // ---- naming ------------------------------------------------------------------
 
     /** Cases are grouped by their class, matching how qualflare-junit5 groups them. */
