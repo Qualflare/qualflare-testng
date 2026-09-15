@@ -1,5 +1,9 @@
 # qualflare-testng
 
+[![CI](https://github.com/Qualflare/qualflare-testng/actions/workflows/ci.yml/badge.svg)](https://github.com/Qualflare/qualflare-testng/actions/workflows/ci.yml)
+[![Qualflare](https://api.qualflare.com/p/qualflare-testng/badge.svg)](https://reports.qualflare.com/p/qualflare-testng/launches)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
+
 A native TestNG reporter for [Qualflare](https://qualflare.com) — captures results
 directly from your test run: status, per-attempt retry history and flakiness, nested
 steps, attachments, and author-facing metadata.
@@ -77,3 +81,24 @@ runs next.
 
 **Nothing in the API can fail your test.** No method throws, and calls are inert when no
 reporter is listening.
+
+## Test reports
+
+This reporter is tested with itself. `e2e/` is a TestNG suite covering this package's own
+behaviour — the metadata API, nested steps, attachments, DataProvider rows as separate
+cases, a retried test recorded as three attempts, and a second class as its own suite —
+run by this reporter and uploaded to Qualflare on every merge to `main` by the
+**published** `qualflare-cli`. The results below are that suite's, reported through the
+code this README documents:
+
+[![Qualflare](https://api.qualflare.com/p/qualflare-testng/banner.svg)](https://reports.qualflare.com/p/qualflare-testng/launches)
+
+Every case there is meant to pass, so a red run is a real regression rather than a fixture
+failing on purpose. The deliberately awkward cases — a throwing `@BeforeClass`, a test that
+never recovers, a timeout, metadata emitted from a configuration method — live in
+`test/integration/fixture`, which sets `testFailureIgnore` and is never uploaded.
+
+That suite is a separate Maven project rather than this repo's unit tests, deliberately:
+the reporter registers itself through `ServiceLoader`, so running the root project's tests
+attaches a live listener to tests that reset the accumulator and inspect it directly. The
+resulting self-report would be one case out of 47 — a green badge meaning nothing.
