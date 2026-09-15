@@ -5,26 +5,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * JVM-scoped run state.
  *
- * <p>Run state lives here, in statics, rather than in listener fields. The reason is that
- * a listener instance does not reliably span a whole run.
+ * <p>Run state lives here, in statics, rather than in listener fields, because the unit
+ * that matters for this reporter is the JVM, not the listener instance. Measured on
+ * TestNG 7.12.0 under Surefire 3.5.6: {@code IExecutionListener.onExecutionStart} and
+ * {@code onExecutionFinish} each fire exactly once per JVM, and exactly one listener
+ * instance serves the whole run -- there is no per-rerun re-construction to guard against
+ * here the way there is on other platforms.
  *
- * <p>Maven Surefire re-runs a failed test in a new {@code TestPlan}. Up to Surefire 3.5.3
- * each of those re-runs also got its own launcher session, and a new session means a new
- * {@code Launcher} and a freshly loaded listener, so a listener keeping state in fields
- * started each re-run empty. Measured on 3.5.3 with {@code rerunFailingTestsCount=3}:
- * three sessions and three listener instances in one JVM. That produced four report files
- * holding 7, 4, 4 and 3 cases, and the flaky test showed up as three separate
- * one-attempt cases instead of one case with three attempts.
- *
- * <p>Surefire 3.5.4 fixed the session scoping. From that version one session covers all
- * re-runs, and one listener instance sees all three plans. Field-held state would work
- * there. It still would not work on 3.5.3 and earlier, which is why the statics stay.
- *
- * <p>One accumulator per JVM, then, and one file per JVM, though that file is written
- * several times -- on every session close and again from the shutdown hook -- each write
- * replacing the last with everything accumulated so far. With {@code forkCount > 1} each
- * JVM has its own accumulator and its own file, which is the directory-merge model
- * {@code qf collect} already uses for pytest-xdist and Vitest shards.
+ * <p>The reason the statics stay is {@code forkCount > 1}. Also measured on 7.12.0:
+ * Surefire's {@code rerunFailingTestsCount} does not apply to the TestNG provider at all
+ * -- a pom configured with it left a hard-failing test running exactly once, with no
+ * second attempt. The only source of retries in this reporter is {@code IRetryAnalyzer},
+ * running in-process in the same JVM as the original attempt. So there is no session or
+ * plan boundary to survive; what statics buy instead is one accumulator per JVM, so that
+ * with {@code forkCount > 1} each fork keeps its own state and writes its own file. That
+ * is the directory-merge model {@code qf collect} already uses for pytest-xdist and
+ * Vitest shards, not a workaround for anything Surefire does across re-runs.
  */
 final class Run {
 
@@ -47,13 +43,15 @@ final class Run {
     /**
      * Rewrites the report with everything accumulated so far.
      *
-     * <p>Repeatable on purpose. It runs on every launcher-session close -- one per re-run
-     * on Surefire 3.5.3 and earlier, one per JVM from 3.5.4 -- and again from the shutdown
-     * hook. Every call rewrites the same file (see {@code ReportWriter}'s per-JVM
-     * filename), so earlier writes are just earlier snapshots and the last one is complete.
+     * <p>Repeatable on purpose. It runs from {@code onExecutionFinish} -- the one call
+     * per JVM described above -- and again from the shutdown hook, as a backstop for a
+     * JVM that never reaches a clean {@code onExecutionFinish}. Every call rewrites the
+     * same file (see {@code ReportWriter}'s per-JVM filename), so an earlier write is just
+     * an earlier snapshot and the last one is complete.
      *
-     * <p>Synchronized because a session close on the main thread can race the shutdown
-     * hook on its own thread, and two writers on one file would truncate the JSON.
+     * <p>Synchronized because {@code onExecutionFinish} on the main thread can race the
+     * shutdown hook on its own thread, and two writers on one file would truncate the
+     * JSON.
      */
     static synchronized void write() {
         if (ACCUMULATOR.isEmpty()) {

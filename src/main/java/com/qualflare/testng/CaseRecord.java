@@ -6,12 +6,15 @@ import java.util.List;
 /**
  * One test, and every attempt at it.
  *
- * <p>Keyed on the JUnit uniqueId, which is what makes re-run accumulation work: Surefire
- * re-executes a failed test in a new TestPlan but the same JVM, and the uniqueId is the
- * same across those plans. Measured on Surefire 3.5.6 with rerunFailingTestsCount=3 --
- * one test arrived as FAILED, FAILED, SUCCESSFUL across plans 1..3, and was absent from
- * plan 4 because Surefire narrows each re-run to what is still failing. This is unchanged
- * from 3.5.2; only the session scoping around it changed, in 3.5.4.
+ * <p>Keyed on {@code uniqueId}, which despite the field name is not any identifier TestNG
+ * hands out -- it is {@link TestKey}'s {@code className#methodName(params)} string, the
+ * one place that identity gets computed (see {@link TestKey} for why). That key is what
+ * makes retry accumulation work: an {@code IRetryAnalyzer} retry re-runs the same method
+ * with the same parameters in the same JVM, so it produces the same key, and successive
+ * attempts land in this record's {@link #attempts} list instead of creating separate
+ * cases. {@code invocationCount} is deliberately excluded from the key -- it increments
+ * for both retries and DataProvider rows, so keying on it would split a retried test into
+ * separate cases instead of accumulating attempts on one.
  *
  * <p>Not thread-safe on its own; {@link Accumulator} owns the locking.
  */
@@ -42,8 +45,9 @@ final class CaseRecord {
     }
 
     /**
-     * The final attempt wins, which is what makes a rerun-to-green read as green.
-     * Surefire's own summary agrees -- it counts that case as a Flake, not a Failure.
+     * The final attempt wins, which is what makes a retry-to-green read as green: a case
+     * that failed once and then passed is reported PASSED, with the earlier failure kept
+     * in {@link #attempts} for {@link #isFlaky()} to find rather than lost.
      */
     String status() {
         return attempts.isEmpty() ? Status.SKIPPED : attempts.get(attempts.size() - 1).status;

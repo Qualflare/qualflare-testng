@@ -7,19 +7,20 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Run state that outlives a single TestPlan.
+ * Run state for the whole JVM.
  *
- * <p>This class exists because of one measured fact: {@code testPlanExecutionFinished}
- * fires ONCE PER PLAN, and Surefire runs a fresh plan for every rerun -- four plans for
- * rerunFailingTestsCount=3. Writing the report from that callback would emit four partial
- * files, or overwrite until only the last rerun survived, silently discarding the retry
- * history that is the main reason to use a native reporter at all. So nothing is written
- * here; {@link QualflareListener} writes once, at JVM shutdown.
+ * <p>This class only accumulates; it never writes. Writing lives in {@link Run} and
+ * {@link ReportWriter}, triggered from {@code onExecutionFinish} and, as a backstop, the
+ * shutdown hook -- both fire at most once per JVM (see {@link Run} for the measured
+ * facts), so there is no per-rerun callback here to guard against overwriting or
+ * fragmenting the retry history. Retries still accumulate correctly because
+ * {@link TestKey} gives a retried method the same key on every {@code IRetryAnalyzer}
+ * attempt, all of them in-process in this same JVM.
  *
- * <p>Synchronised rather than merely concurrent-collection based: under
- * {@code junit.jupiter.execution.parallel.enabled} the listener is called from
- * ForkJoinPool workers (observed: ForkJoinPool-1-worker-2), and appending an attempt is a
- * read-modify-write on a case that must not interleave.
+ * <p>Synchronised rather than merely concurrent-collection based: with TestNG configured
+ * for {@code parallel="methods"}, the listener is called from multiple worker threads
+ * concurrently, and appending an attempt is a read-modify-write on a case that must not
+ * interleave.
  */
 final class Accumulator {
 

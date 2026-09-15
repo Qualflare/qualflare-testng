@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The author-supplied half of a case: everything JUnit itself has no concept of.
+ * The author-supplied half of a case: everything TestNG itself has no concept of.
  *
  * <p>Rows are plain arrays rather than small classes on purpose. They exist only between
  * {@link Replay} and {@link ReportWriter}, never cross a public boundary, and a handful of

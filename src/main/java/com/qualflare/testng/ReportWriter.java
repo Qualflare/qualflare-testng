@@ -28,7 +28,7 @@ final class ReportWriter {
      * unique: with {@code forkCount > 1} or {@code reuseForks=false} each fork writes
      * into the SAME directory and {@code qf collect} merges every file it finds, so a
      * collision would lose a fork's results. Within a JVM it must be STABLE, because the
-     * report is now written more than once -- on every launcher-session close, and again
+     * report is now written more than once -- from {@code onExecutionFinish}, and again
      * from the shutdown hook -- and a fresh name each time would leave a trail of partial
      * reports for collect to merge into duplicate cases.
      *
@@ -115,9 +115,9 @@ final class ReportWriter {
         return Json.object()
                 .field("name", suiteName)
                 .field("duration", total)
-                // "unit" everywhere: the JUnit Platform runs unit, integration and E2E
-                // suites alike, and the framework cannot tell them apart. Guessing from
-                // the runner would mislabel a Selenium suite as a unit test.
+                // "unit" everywhere: TestNG runs unit, integration and E2E suites alike,
+                // and the framework cannot tell them apart. Guessing from the runner
+                // would mislabel a Selenium suite as a unit test.
                 .field("category", "unit")
                 .raw("cases", arr.toString())
                 .end();
