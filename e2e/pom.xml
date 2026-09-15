@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.qualflare.e2e</groupId>
+  <artifactId>qualflare-testng-e2e</artifactId>
+  <version>1.0</version>
+
+  <properties>
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <testng.version>7.12.0</testng.version>
+    <surefire.version>3.5.6</surefire.version>
+    <!-- Overridden by CI to the version just built, so the dogfood exercises THIS
+         commit rather than whatever is on Central. Nothing is on Central yet, so a
+         stale value here would fail to resolve rather than silently test the wrong
+         thing, which is the failure mode we want. -->
+    <qualflare.version>0.1.0-SNAPSHOT</qualflare.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.testng</groupId><artifactId>testng</artifactId>
+      <version>${testng.version}</version><scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.qualflare</groupId><artifactId>qualflare-testng</artifactId>
+      <version>${qualflare.version}</version><scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire.version}</version>
+        <!-- No testFailureIgnore here, deliberately. Every case in this suite is meant
+             to pass, so a failure must fail the build. The deliberately awkward cases
+             live in test/integration/fixture, which sets that flag and is never
+             uploaded. -->
+      </plugin>
+    </plugins>
+  </build>
+</project>
