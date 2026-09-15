@@ -52,6 +52,8 @@ mirroring how `qualflare-junit5` keeps its published artifact dependency-free.
 - `IReporter` (that interface exists to generate HTML reports, not to observe execution)
 - `testng.xml` suite-file parsing
 - `IDataProviderListener`, `IAlterSuiteListener`
+- `Reporter.log()` capture — see the section below for why this needs a cross-reporter
+  wire change rather than a TestNG-side one
 - Any change to `qualflare-cli`: the reporter writes the native format the
   `native/qualflare` parser already reads
 
@@ -195,12 +197,26 @@ Calls made when no test is in scope — off the test thread, or outside a test �
 with a warning rather than attached to whichever test runs next. Wrong metadata that looks
 right is worse than absent metadata.
 
-Additionally, `Reporter.log()` output is captured into the attempt's existing `stdout`
-field, read per attempt via `Reporter.getOutput(ITestResult)` (verified present in 7.12.0).
-TestNG users lean on `Reporter.log()` the way other ecosystems lean on `console.log`, and
-the wire field already exists. Reading it per `ITestResult` rather than from the global
-`Reporter.getOutput()` is what keeps output attributed to the right attempt under
-`parallel="methods"`.
+### `Reporter.log()` capture — cut from v1
+
+The original draft of this spec promised to capture `Reporter.log()` output into the
+attempt's `stdout` field, described as a ten-line addition because "the wire field already
+exists". Checking before planning showed that was wrong twice over:
+
+- The JVM reporter has **no stdout support at all**. `Attempt` carries only status,
+  duration, message and trace, and `ReportWriter` never emits stdout. The field exists in
+  the CLI's native parser (`qualflare.go:112`), not in the producer.
+- It exists there only on **attempts**, and `ReportWriter` omits the attempts array
+  entirely below `MIN_ATTEMPTS_TO_SEND = 2`. So for an ordinary test that ran once — the
+  common case, and the one where `Reporter.log()` output is most wanted — there would be
+  nowhere to put it.
+
+Doing it properly means adding a case-level output field to the producer, the writer, and
+the server's ingest, which is a wire change affecting all ten reporters rather than a
+TestNG detail. `Reporter.getOutput(ITestResult)` does exist (verified in 7.12.0), so the
+capture side is easy whenever the destination does.
+
+Deferred. Revisit as a cross-reporter change if users ask for console output in reports.
 
 ## Error handling
 
