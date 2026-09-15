@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>qf.fixture</groupId><artifactId>testng-fixture</artifactId><version>1.0</version>
+  <properties>
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Overridden by the CI matrix, which runs this against 7.4.0 and 7.12.0. -->
+    <testng.version>7.12.0</testng.version>
+    <surefire.version>3.5.6</surefire.version>
+    <!-- Passed in by verify.py, read from the ROOT pom. Hardcoding it goes stale the
+         moment versions:set runs, which cost qualflare-junit5 four red commits. -->
+    <qualflare.version>0.1.0-SNAPSHOT</qualflare.version>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>org.testng</groupId><artifactId>testng</artifactId>
+      <version>${testng.version}</version><scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.qualflare</groupId><artifactId>qualflare-testng</artifactId>
+      <version>${qualflare.version}</version><scope>test</scope>
+    </dependency>
+  </dependencies>
+  <build><plugins>
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId>
+      <version>${surefire.version}</version>
+      <configuration><testFailureIgnore>true</testFailureIgnore></configuration>
+    </plugin>
+  </plugins></build>
+</project>
