@@ -117,4 +117,9 @@ final class Accumulator {
         pendingEntries.clear();
         pendingAttachments.clear();
     }
+
+    /** Test-only: did any metadata arrive for this key? */
+    synchronized boolean hasEntriesFor(String uniqueId) {
+        return pendingEntries.containsKey(uniqueId);
+    }
 }
