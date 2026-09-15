@@ -3,6 +3,7 @@ package com.qualflare.testng;
 import org.testng.ITestResult;
 import org.testng.Reporter;
 
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -71,6 +72,44 @@ public final class Qualflare {
         emit(Keys.MASKED_PARAMETER, str(name));
     }
 
+    /**
+     * Attaches a file on disk to the running test.
+     *
+     * <p>Explicit rather than implicit, because TestNG has no equivalent of the JUnit
+     * Platform's {@code fileEntryPublished}: there is no framework callback that hands a
+     * reporter a published file, so the only way a file can reach the report is a call
+     * here.
+     *
+     * <p>Read immediately, not at the end of the run. A screenshot written to a temp
+     * directory the test then deletes would otherwise be gone by the time the report is
+     * written. PNG, JPEG and GIF are copied into the report directory and referenced by
+     * name; everything else is base64-inlined against a per-run budget.
+     *
+     * <p>An unreadable or missing file is dropped silently, and nothing here throws. A
+     * broken path must never be the reason somebody's build goes red -- the test already
+     * passed or failed on its own merits.
+     *
+     * @param name     the label shown on the case; null becomes an empty name
+     * @param file     the file to attach; missing, unreadable and null are all dropped
+     * @param mimeType the media type, e.g. {@code "image/png"}; drives inline-vs-copy
+     */
+    public static void attachment(String name, Path file, String mimeType) {
+        ITestResult r = current();
+        if (r == null) {
+            warnDropped();
+            return;
+        }
+        try {
+            Attachments.Attachment a = Attachments.of(name, file, mimeType);
+            if (a == null) {
+                return; // unreadable: already dropped by Attachments, nothing to report
+            }
+            Run.accumulator().attachment(TestKey.of(r), a);
+        } catch (RuntimeException ignored) {
+            // Fire and forget. An attachment problem must never fail somebody's run.
+        }
+    }
+
     public static void step(String name, Runnable body) {
         if (body == null) {
             return;
@@ -115,16 +154,21 @@ public final class Qualflare {
     private static void emit(String key, String value) {
         ITestResult r = current();
         if (r == null) {
-            if (WARNED.compareAndSet(false, true)) {
-                System.err.println("[qualflare-testng] metadata call outside a running test was"
-                        + " dropped. Calls must be made on the test's own thread.");
-            }
+            warnDropped();
             return;
         }
         try {
             Run.accumulator().entry(TestKey.of(r), key, value);
         } catch (RuntimeException ignored) {
             // Fire and forget. A metadata problem must never fail somebody's run.
+        }
+    }
+
+    /** Once per JVM, not once per call, so a loop in a helper cannot drown the log. */
+    private static void warnDropped() {
+        if (WARNED.compareAndSet(false, true)) {
+            System.err.println("[qualflare-testng] metadata call outside a running test was"
+                    + " dropped. Calls must be made on the test's own thread.");
         }
     }
 

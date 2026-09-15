@@ -123,4 +123,19 @@ final class Accumulator {
     synchronized boolean hasEntriesFor(String uniqueId) {
         return pendingEntries.containsKey(uniqueId);
     }
+
+    /**
+     * Test-only: how many keys hold buffered metadata, regardless of which. Lets a test
+     * assert that a dropped call landed NOWHERE, rather than only that it missed the one
+     * key the test happens to know about.
+     */
+    synchronized int pendingEntryKeyCount() {
+        return pendingEntries.size();
+    }
+
+    /** Test-only: the attachments buffered for this key; never null. */
+    synchronized List<Attachments.Attachment> pendingAttachmentsFor(String uniqueId) {
+        List<Attachments.Attachment> l = pendingAttachments.get(uniqueId);
+        return l == null ? new ArrayList<>() : new ArrayList<>(l);
+    }
 }

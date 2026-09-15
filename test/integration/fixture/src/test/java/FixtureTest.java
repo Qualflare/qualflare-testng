@@ -1,4 +1,5 @@
 import com.qualflare.testng.Qualflare;
+import java.nio.charset.StandardCharsets;
 import org.testng.annotations.*;
 import static org.testng.Assert.*;
 
@@ -24,12 +25,20 @@ public class FixtureTest {
     @Test(enabled = false) public void disabled() { fail("should never run"); }
 
     @Test
-    public void carriesMetadata() {
+    public void carriesMetadata() throws Exception {
         Qualflare.label("feature", "checkout");
         Qualflare.tag("smoke");
         Qualflare.priority(Qualflare.HIGH);
         Qualflare.parameter("sku", "widget");
         Qualflare.maskedParameter("token");
         Qualflare.step("add to cart", () -> Qualflare.parameter("qty", "2"));
+
+        // Proves the whole attachment path end to end: API -> Attachments -> Accumulator
+        // -> ReportWriter. Inlined rather than image-copied so the assertion can read the
+        // content back out of the report itself.
+        java.nio.file.Path f = java.nio.file.Files.createTempFile("qf-fixture", ".txt");
+        java.nio.file.Files.write(f, "receipt-body".getBytes(StandardCharsets.UTF_8));
+        Qualflare.attachment("receipt", f, "text/plain");
+        java.nio.file.Files.deleteIfExists(f);
     }
 }

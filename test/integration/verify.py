@@ -6,6 +6,7 @@ that would silently regress: a retried failure recorded as a skip, DataProvider 
 collapsed into one case, a timeout flattened into a failure, a broken @BeforeClass
 leaving a suite that reads green.
 """
+import base64
 import glob
 import json
 import os
@@ -145,6 +146,24 @@ def main():
               props.get("sku") == "widget", props.get("sku"))
         check("a masked parameter carries NO value",
               "token" in props and props.get("token") == "", props.get("token"))
+
+        # Qualflare.attachment is the ONLY way a file can reach the report: TestNG has no
+        # equivalent of the JUnit Platform's fileEntryPublished. Without this check the
+        # whole Attachments/Accumulator/ReportWriter attachment path is unreachable code
+        # behind a README promise.
+        atts = meta.get("attachments") or []
+        check("an attachment reached the report", len(atts) == 1, atts)
+        if atts:
+            a = atts[0]
+            check("with its name and media type",
+                  a.get("name") == "receipt" and a.get("mimeType") == "text/plain", a)
+            decoded = None
+            if a.get("content"):
+                try:
+                    decoded = base64.b64decode(a["content"]).decode("utf-8")
+                except Exception as exc:  # noqa: BLE001 - reported, not raised
+                    decoded = "undecodable: %s" % exc
+            check("and its content, base64-inlined", decoded == "receipt-body", decoded)
 
     print()
     if failures:
