@@ -32,6 +32,24 @@ support — no `@Listeners` annotation, no `-listener` flag, no `testng.xml` edi
 Requires **TestNG 7.4.0+** and **Java 11+**. The 7.4.0 floor is not arbitrary:
 `ITestResult.wasRetried()` must exist, and the entire retry story depends on it.
 
+## Quickstart
+
+```bash
+mvn test
+npm install -g @qualflare/cli
+qf login my-project "$QUALFLARE_TOKEN" --force
+qf my-project collect ./qualflare-results
+```
+
+The reporter writes one uniquely-named JSON file per JVM into `qualflare-results/`, and
+`qf collect` merges every file in the directory into a single launch — which is what makes
+a forked or sharded run arrive as one report rather than one per worker. Override the
+directory with `-Dqualflare.outputDir=...` or `QUALFLARE_OUTPUT_DIR`.
+
+`qualflare-cli` is a standalone Go binary, not a Java artifact — it is not on Maven
+Central. Homebrew and npm are the two channels; the release page also carries plain
+binaries for every platform.
+
 **Zero runtime dependencies.** The JSON is hand-rolled, and TestNG itself is `provided`
 scope. A test reporter sits on everyone's test classpath; putting a second copy of
 anything in front of what the project already uses is a real source of breakage.
